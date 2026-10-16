@@ -1,0 +1,521 @@
+<!DOCTYPE html>
+<html lang="ml">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>GIS Portal - Ward, Survey & Election Booth Map</title>
+    
+    <!-- 1. Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <!-- 2. Locate Control CSS (For Accurate GPS Blue Dot) -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet.locatecontrol@0.81.1/dist/L.Control.Locate.min.css" />
+    <!-- 3. Font Awesome for Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css" />
+    
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+        }
+        body, html {
+            height: 100%;
+            width: 100%;
+            overflow: hidden;
+            background-color: #0f172a;
+        }
+        #map {
+            height: 100vh;
+            width: 100vw;
+            z-index: 1;
+        }
+
+        /* Floating App Header */
+        .app-header {
+            position: absolute;
+            top: 12px;
+            left: 55px;
+            right: 55px;
+            z-index: 1000;
+            background: rgba(15, 23, 42, 0.9);
+            backdrop-filter: blur(8px);
+            color: #ffffff;
+            padding: 10px 16px;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.35);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border: 1px solid rgba(255, 255, 255, 0.15);
+        }
+        .app-title {
+            font-size: 15px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .app-title i {
+            color: #38bdf8;
+        }
+        .gps-badge {
+            font-size: 12px;
+            background: rgba(34, 197, 94, 0.2);
+            color: #4ade80;
+            padding: 4px 10px;
+            border-radius: 20px;
+            border: 1px solid rgba(74, 222, 128, 0.3);
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            font-weight: 500;
+        }
+
+        /* Search Box */
+        .search-container {
+            position: absolute;
+            top: 68px;
+            left: 55px;
+            z-index: 1000;
+            width: 270px;
+        }
+        .search-box {
+            width: 100%;
+            padding: 9px 14px;
+            border-radius: 8px;
+            border: 1px solid rgba(255,255,255,0.2);
+            background: rgba(255, 255, 255, 0.95);
+            font-size: 13px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.25);
+            outline: none;
+        }
+
+        /* Legend Box */
+        .legend-card {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(5px);
+            padding: 12px 15px;
+            border-radius: 10px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.25);
+            font-size: 12.5px;
+            line-height: 22px;
+            color: #1e293b;
+            border: 1px solid #e2e8f0;
+        }
+        .legend-title {
+            font-weight: 700;
+            margin-bottom: 6px;
+            color: #0f172a;
+            font-size: 13px;
+            border-bottom: 1px solid #cbd5e1;
+            padding-bottom: 4px;
+        }
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-top: 4px;
+        }
+        .line-ward {
+            width: 20px;
+            height: 4px;
+            background: #ef4444;
+            border-radius: 2px;
+        }
+        .line-survey {
+            width: 20px;
+            height: 0px;
+            border-top: 3px dashed #facc15;
+        }
+        .dot-booth {
+            width: 12px;
+            height: 12px;
+            background: #2563eb;
+            border: 2px solid #fff;
+            border-radius: 50%;
+            box-shadow: 0 0 4px rgba(0,0,0,0.4);
+        }
+        .dot-gps {
+            width: 12px;
+            height: 12px;
+            background: #0ea5e9;
+            border: 2px solid #fff;
+            border-radius: 50%;
+            box-shadow: 0 0 8px #0ea5e9;
+        }
+
+        /* Popup Styling */
+        .leaflet-popup-content-wrapper {
+            border-radius: 10px;
+            padding: 2px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.25);
+        }
+        .popup-header {
+            font-weight: 700;
+            font-size: 14px;
+            color: #0f172a;
+            border-bottom: 2px solid #38bdf8;
+            padding-bottom: 4px;
+            margin-bottom: 6px;
+        }
+        .popup-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 4px;
+            font-size: 12px;
+        }
+        .popup-table td {
+            padding: 4px 6px;
+            border-bottom: 1px solid #f1f5f9;
+        }
+        .popup-table td.key {
+            font-weight: 600;
+            color: #475569;
+            width: 40%;
+        }
+        .nav-btn {
+            background: #2563eb;
+            color: #ffffff !important;
+            padding: 6px 12px;
+            border-radius: 6px;
+            text-decoration: none;
+            font-size: 12px;
+            font-weight: 500;
+            display: inline-block;
+            margin-top: 8px;
+        }
+        .leaflet-control-layers {
+            border-radius: 10px !important;
+            border: none !important;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.25) !important;
+            padding: 6px 10px !important;
+            font-size: 13px !important;
+        }
+
+        /* Mobile Adjustments */
+        @media (max-width: 600px) {
+            .app-header {
+                left: 50px;
+                right: 50px;
+                padding: 8px 12px;
+            }
+            .app-title span {
+                font-size: 13px;
+            }
+            .gps-badge span {
+                display: none;
+            }
+            .search-container {
+                left: 50px;
+                width: calc(100vw - 100px);
+                top: 58px;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Top Floating Title & Live GPS Status -->
+    <div class="app-header">
+        <div class="app-title">
+            <i class="fa-solid fa-map-location-dot"></i>
+            <span>Ward, Survey & Election GIS Map</span>
+        </div>
+        <div class="gps-badge" id="gps-status">
+            <i class="fa-solid fa-satellite-dish"></i>
+            <span id="gps-text">GPS Ready</span>
+        </div>
+    </div>
+
+    <!-- Quick Search Feature -->
+    <div class="search-container">
+        <input type="text" id="featureSearch" class="search-box" placeholder="🔍 വാർഡ് / സർവ്വേ നമ്പർ / ബൂത്ത് തിരയുക...">
+    </div>
+
+    <!-- Main Map Container -->
+    <div id="map"></div>
+
+    <!-- ================================================================= -->
+    <!-- JAVASCRIPT LIBRARIES (LEAFLET + LOCATE CONTROL + OMNIVORE PLUGIN) -->
+    <!-- ================================================================= -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/leaflet.locatecontrol@0.81.1/dist/L.Control.Locate.min.js"></script>
+    <!-- Leaflet Omnivore Plugin for Direct KML & GeoJSON Loading -->
+    <script src="https://api.tiles.mapbox.com/mapbox.js/plugins/leaflet-omnivore/v0.3.1/leaflet-omnivore.min.js"></script>
+
+    <script>
+        // =========================================================================
+        // 1. INITIALIZE MAP & BASE LAYERS
+        // =========================================================================
+        const map = L.map('map', {
+            zoomControl: true,
+            maxZoom: 22
+        }).setView([11.12, 76.22], 14); // Default Center (Auto-zooms when KML loads)
+
+        // Google Hybrid (Satellite + Place Names)
+        const googleHybrid = L.tileLayer('https://{s}.google.com/vt/lyrs=s,h&x={x}&y={y}&z={z}', {
+            maxZoom: 22,
+            maxNativeZoom: 20,
+            subdomains: ['mt0', 'mt1', 'mt2', 'mt3'],
+            attribution: '© Google Maps'
+        }).addTo(map);
+
+        // Google Satellite Only
+        const googleSat = L.tileLayer('https://{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}', {
+            maxZoom: 22,
+            maxNativeZoom: 20,
+            subdomains: ['mt0', 'mt1', 'mt2', 'mt3'],
+            attribution: '© Google Satellite'
+        });
+
+        // OpenStreetMap
+        const osm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 22,
+            maxNativeZoom: 19,
+            attribution: '© OpenStreetMap'
+        });
+
+        // =========================================================================
+        // 2. CREATE LAYER GROUPS FOR WARD, SURVEY & ELECTION BOOTHS
+        // =========================================================================
+        const wardLayer = L.featureGroup().addTo(map);
+        const surveyLayer = L.featureGroup().addTo(map);
+        const boothLayer = L.featureGroup().addTo(map);
+        const allFeatures = []; // Stores features for Search Bar
+
+        // =========================================================================
+        // 3. LAYER STYLES & POPUP BUILDER
+        // =========================================================================
+        const wardStyle = {
+            color: "#ef4444",       // Red Solid Line
+            weight: 3.5,
+            opacity: 1,
+            fillColor: "#ef4444",
+            fillOpacity: 0.05
+        };
+
+        const surveyStyle = {
+            color: "#facc15",       // Yellow Dashed Line
+            weight: 2,
+            opacity: 0.95,
+            dashArray: "6, 6",
+            fillColor: "#facc15",
+            fillOpacity: 0.02
+        };
+
+        function createBoothMarker(feature, latlng) {
+            return L.circleMarker(latlng, {
+                radius: 8,
+                fillColor: "#2563eb", // Blue Dot Marker for Booths
+                color: "#ffffff",
+                weight: 2.5,
+                opacity: 1,
+                fillOpacity: 0.95
+            });
+        }
+
+        function createPopupContent(feature, defaultTitle) {
+            const props = feature.properties || {};
+            const title = props.name || props.Name || props.WARD_NAME || props.SURVEY_NO || defaultTitle;
+            
+            let html = `<div class="popup-header">${title}</div><table class="popup-table">`;
+            const ignoreKeys = ['styleUrl', 'styleHash', 'stroke', 'stroke-opacity', 'stroke-width', 'fill', 'fill-opacity', 'icon'];
+            
+            for (let key in props) {
+                if (props[key] && !ignoreKeys.includes(key)) {
+                    html += `<tr><td class="key">${key}</td><td>${props[key]}</td></tr>`;
+                }
+            }
+            html += `</table>`;
+            
+            // Add Google Maps Direction Button for Points (Election Booths)
+            if (feature.geometry && feature.geometry.type === 'Point') {
+                const coords = feature.geometry.coordinates;
+                html += `<div style="text-align:right;">
+                    <a href="https://www.google.com/maps/dir/?api=1&destination=${coords[1]},${coords[0]}" 
+                       target="_blank" class="nav-btn">
+                       <i class="fa-solid fa-diamond-turn-right"></i> വഴി കാണിക്കുക (Navigate)
+                    </a>
+                </div>`;
+            }
+            return html;
+        }
+
+        function registerForSearch(feature, layer) {
+            const props = feature.properties || {};
+            const searchName = (props.name || props.Name || props.description || "").toString().toLowerCase();
+            if (searchName) {
+                allFeatures.push({ name: searchName, layer: layer });
+            }
+        }
+
+        // =========================================================================
+        // 4. LOAD KML FILES USING LEAFLET-OMNIVORE PLUGIN
+        // =========================================================================
+
+        // Helper function to load separate KML files (ward.kml, survey.kml, booths.kml)
+        function loadSeparateKML(kmlFile, targetGroup, customStyle, defaultTitle, isPointLayer = false) {
+            const customTemplate = L.geoJson(null, {
+                style: customStyle,
+                pointToLayer: isPointLayer ? createBoothMarker : undefined,
+                onEachFeature: function(feature, layer) {
+                    layer.bindPopup(createPopupContent(feature, defaultTitle));
+                    registerForSearch(feature, layer);
+                }
+            });
+
+            omnivore.kml(kmlFile, null, customTemplate)
+                .on('ready', function() {
+                    if (targetGroup.getLayers().length > 0) {
+                        map.fitBounds(targetGroup.getBounds(), { padding: [30, 30] });
+                    }
+                })
+                .on('error', function() {
+                    console.log(`${kmlFile} not found (Optional if using single map.kml).`);
+                })
+                .addTo(targetGroup);
+        }
+
+        // --- METHOD 1: Try loading 3 separate KML files ---
+        loadSeparateKML('ward.kml', wardLayer, wardStyle, 'Municipal Ward Boundary', false);
+        loadSeparateKML('survey.kml', surveyLayer, surveyStyle, 'Village Survey Boundary', false);
+        loadSeparateKML('booths.kml', boothLayer, null, 'Election Booth', true);
+
+        // --- METHOD 2: Also support a single combined 'map.kml' exported from My Maps ---
+        omnivore.kml('map.kml')
+            .on('ready', function() {
+                this.eachLayer(function(layer) {
+                    const feature = layer.feature || {};
+                    const props = feature.properties || {};
+                    const name = (props.name || props.Name || "").toLowerCase();
+
+                    // 1. Points -> Election Booths Layer
+                    if (feature.geometry && feature.geometry.type === 'Point') {
+                        const marker = createBoothMarker(feature, layer.getLatLng());
+                        marker.bindPopup(createPopupContent(feature, 'Election Booth'));
+                        boothLayer.addLayer(marker);
+                        registerForSearch(feature, marker);
+                    } 
+                    // 2. Polygons/Lines with 'survey' or 'plot' -> Village Survey Layer
+                    else if (name.includes('survey') || name.includes('സര്‍വ്വേ') || name.includes('plot')) {
+                        layer.setStyle(surveyStyle);
+                        layer.bindPopup(createPopupContent(feature, 'Village Survey Boundary'));
+                        surveyLayer.addLayer(layer);
+                        registerForSearch(feature, layer);
+                    } 
+                    // 3. All other Polygons/Lines -> Municipal Ward Layer
+                    else {
+                        layer.setStyle(wardStyle);
+                        layer.bindPopup(createPopupContent(feature, 'Municipal Ward Boundary'));
+                        wardLayer.addLayer(layer);
+                        registerForSearch(feature, layer);
+                    }
+                });
+
+                if (this.getBounds().isValid()) {
+                    map.fitBounds(this.getBounds(), { padding: [30, 30] });
+                }
+            })
+            .on('error', function() {
+                console.log("Single map.kml not found (Using separate KML files if uploaded).");
+            });
+
+        // =========================================================================
+        // 5. LAYER CONTROL (SWITCH SATELLITE VIEW & TOGGLE LAYERS ON/OFF)
+        // =========================================================================
+        const baseMaps = {
+            "🌍 Google Hybrid (Satellite + പേരുകൾ)": googleHybrid,
+            "🛰️ Google Satellite Only": googleSat,
+            "🗺️ Normal Street Map": osm
+        };
+
+        const overlayMaps = {
+            "🟥 Municipal Ward Boundary": wardLayer,
+            "🟨 Village Survey Boundary": surveyLayer,
+            "🔵 Election Booths": boothLayer
+        };
+
+        L.control.layers(baseMaps, overlayMaps, {
+            collapsed: true,
+            position: 'topright'
+        }).addTo(map);
+
+        // =========================================================================
+        // 6. ACCURATE LIVE GPS BLUE DOT (LOCATE CONTROL)
+        // =========================================================================
+        L.control.locate({
+            position: 'topleft',
+            setView: 'untilPanOrZoom',
+            keepCurrentZoomLevel: false,
+            initialZoomLevel: 18,
+            flyTo: true,
+            drawCircle: true,
+            drawMarker: true,
+            showCompass: true,
+            locateOptions: {
+                enableHighAccuracy: true,
+                maxZoom: 20,
+                watch: true,
+                maximumAge: 0,
+                timeout: 10000
+            },
+            strings: {
+                title: "എന്റെ കൃത്യമായ GPS ലൊക്കേഷൻ കാണിക്കുക (Live Blue Dot)",
+                metersUnit: "മീറ്റർ",
+                popup: "നിങ്ങൾ ഇവിടെയാണ് ({distance} {unit} കൃത്യതയിൽ)"
+            }
+        }).addTo(map);
+
+        map.on('locationfound', function(e) {
+            const acc = Math.round(e.accuracy);
+            const gpsBadge = document.getElementById('gps-status');
+            const gpsText = document.getElementById('gps-text');
+            gpsBadge.style.background = "rgba(14, 165, 233, 0.25)";
+            gpsBadge.style.color = "#38bdf8";
+            gpsText.innerHTML = `GPS Active (±${acc}m)`;
+        });
+
+        map.on('locationerror', function() {
+            document.getElementById('gps-text').innerHTML = `GPS Off / Blocked`;
+        });
+
+        // =========================================================================
+        // 7. SEARCH BAR FUNCTIONALITY
+        // =========================================================================
+        document.getElementById('featureSearch').addEventListener('input', function(e) {
+            const query = e.target.value.toLowerCase().trim();
+            if (query.length < 2) return;
+
+            const match = allFeatures.find(item => item.name.includes(query));
+            if (match) {
+                if (match.layer.getBounds) {
+                    map.fitBounds(match.layer.getBounds(), { maxZoom: 19 });
+                } else if (match.layer.getLatLng) {
+                    map.flyTo(match.layer.getLatLng(), 19);
+                }
+                match.layer.openPopup();
+            }
+        });
+
+        // =========================================================================
+        // 8. MAP LEGEND & SCALE BAR
+        // =========================================================================
+        const legend = L.control({ position: 'bottomleft' });
+        legend.onAdd = function () {
+            const div = L.DomUtil.create('div', 'legend-card');
+            div.innerHTML = `
+                <div class="legend-title">മാപ്പ് സൂചിക (Legend)</div>
+                <div class="legend-item"><span class="line-ward"></span> Municipal Ward Boundary</div>
+                <div class="legend-item"><span class="line-survey"></span> Village Survey Boundary</div>
+                <div class="legend-item"><span class="dot-booth"></span> Election Booth</div>
+                <div class="legend-item"><span class="dot-gps"></span> Live GPS (Blue Dot)</div>
+            `;
+            return div;
+        };
+        legend.addTo(map);
+
+        L.control.scale({ imperial: false, position: 'bottomright' }).addTo(map);
+    </script>
+</body>
+</html>
